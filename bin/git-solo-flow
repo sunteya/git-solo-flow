@@ -1,0 +1,69 @@
+#!/bin/bash
+
+ORIGIN=origin
+UPSTREAM=origin
+MASTER=master
+
+_git_is_dirty(){
+	git diff --no-ext-diff --quiet --exit-code || echo '*'
+	if git rev-parse --quiet --verify HEAD >/dev/null; then
+		git diff-index --cached --quiet HEAD -- || echo '+'
+	else
+		echo '#'
+	fi
+}
+
+_require_branch(){
+	if [ -z $1 ]; then
+		_die "Fatal: Please specify a branch name."
+	fi
+
+	if [ $1 == "master" ]; then
+		_die "Fatal: Please specify a branch name."
+	fi
+}
+
+TIMES_STASHED=0
+_git_stash(){
+	if [ -n "$(_git_is_dirty)" ]; then
+		git stash > /dev/null
+		TIMES_STASHED=$((TIMES_STASHED + 1))
+	fi
+}
+
+_git_stash_pop(){
+	if [ $TIMES_STASHED -gt 0 ]; then
+		git stash pop > /dev/null
+		TIMES_STASHED=$((TIMES_STASHED - 1))
+	fi
+}
+
+_git_checkout(){
+	git checkout $@
+}
+
+
+start(){
+	BRANCH=$1
+	_require_branch $BRANCH
+
+	_git_stash
+	_git_checkout -b $BRANCH $MASTER
+	_git_stash_pop
+}
+
+usage(){
+	echo "usage: git solo-flow <subcommand>"
+	echo "Available subcommands are:"
+	echo "   start     Begin working on a new feature."
+	# echo "   finish    Merge and clean up branches."
+}
+
+command=${1:-usage}
+shift
+case "$command" in
+	start) start $@ ;;
+	# finish) finish $@ ;;
+	*) usage ;;
+esac
+
