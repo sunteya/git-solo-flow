@@ -4,6 +4,9 @@ ORIGIN=origin
 UPSTREAM=origin
 MASTER=master
 
+Q="--quiet"
+CUR_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+
 _die() {
 	echo $@ && exit 1
 }
@@ -100,11 +103,22 @@ finish(){
 	git_remove_remote_branch $BRANCH_UPSTREAM
 }
 
+publish(){
+	BRANCH=${1:-$CUR_BRANCH}
+	_require_branch $BRANCH
+
+	# TODO rebase $BRANCH
+	echo "Forcing push branch $BRANCH to $ORIGIN..."
+	git push --set-upstream --force $ORIGIN $BRANCH || _die "Could not push branch $BRANCH to $ORIGIN."
+}
+
+
 usage(){
 	echo "usage: git solo-flow <subcommand>"
 	echo "Available subcommands are:"
 	echo "   start     Begin working on a new feature."
 	echo "   finish    Merge and clean up branches."
+	echo "   publish   Publish branch to origin."
 }
 
 command=${1:-usage}
@@ -112,6 +126,7 @@ shift
 case "$command" in
 	start) start $@ ;;
 	finish) finish $@ ;;
+	publish) publish $@ ;;
 	*) usage ;;
 esac
 
