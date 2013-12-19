@@ -1,14 +1,16 @@
 #!/bin/bash
 
+# set -x 
+
 ORIGIN=origin
-UPSTREAM=origin
 MASTER=master
 
 Q="--quiet"
 CUR_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
 
-_die() {
-	echo $@ && exit 1
+_die(){
+	echo "Fatal: $@"
+	exit 1
 }
 
 _git_is_dirty(){
@@ -20,14 +22,25 @@ _git_is_dirty(){
 	fi
 }
 
-_require_branch(){
+_git_is_untracked(){
+	if [ -n "$(git ls-files --others --exclude-standard)" ]; then
+		echo '%'
+	fi
+}
+
+_require_branch_is_valid_name(){
 	if [ -z $1 ]; then
-		_die "Fatal: Please specify a branch name."
+		_die "Please specify a branch name."
 	fi
 
 	if [ $1 == "master" ]; then
-		_die "Fatal: Please specify a branch name."
+		_die "Please specify a branch name."
 	fi
+}
+
+_require_local_branch_exists(){
+	_require_branch_is_valid_name $1
+	git rev-parse --quiet --verify $1 >/dev/null || _die "The base '$1' doesn't exists locally or is not a branch."
 }
 
 _lookup_upstream() {
@@ -39,40 +52,35 @@ _lookup_upstream() {
 
 TIMES_STASHED=0
 _git_stash(){
-	if [ -n "$(_git_is_dirty)" ]; then
-		git stash > /dev/null
+	if [ -n "$(_git_is_dirty)" ] || [ -n "$(_git_is_untracked)" ]; then
+		git stash --include-untracked >/dev/null
 		TIMES_STASHED=$((TIMES_STASHED + 1))
 	fi
 }
 
 _git_stash_pop(){
 	if [ $TIMES_STASHED -gt 0 ]; then
-		git stash pop > /dev/null
+		git stash pop >/dev/null
 		TIMES_STASHED=$((TIMES_STASHED - 1))
 	fi
 }
 
 _git_checkout(){
-	git checkout $@
+	git checkout $1 || _die "Could not check out branch '$1'."
 }
 
-git_remove_local_branch(){
-	git branch -d $1
+_git_remove_local_branch(){
+	[ -n "$1" ]git branch --delete "$1"
 }
 
-git_remove_remote_branch(){
-	local name
-	name=$(echo $1 | sed -e "s/^${ORIGIN}\///g")
-
-	if [ -n "$name" ]; then
-		git push $ORIGIN :$name
-	fi
+_git_remove_remote_branch(){
+	[ -n "$1" ] && git push $ORIGIN :"$1"
 }
 
 
 start(){
 	BRANCH=$1
-	_require_branch $BRANCH
+	_require_branch_is_valid_name $BRANCH
 
 	_git_stash
 	_git_checkout -b $BRANCH $MASTER
@@ -81,10 +89,9 @@ start(){
 
 finish(){
 	BRANCH=${1:-$CUR_BRANCH}
-	_require_branch $BRANCH
+	_require_local_branch_exists $BRANCH
 
 	BRANCH_UPSTREAM=$(_lookup_upstream $BRANCH)
-
 	if [ -n "$BRANCH_UPSTREAM" ]; then
 		local commits
 		commits=$(git rev-list --left-right $BRANCH_UPSTREAM...$BRANCH)
@@ -92,20 +99,20 @@ finish(){
 	fi
 
 	# TODO rebase $BRANCH
-	_git_checkout $MASTER || _die "Could not check out branch '$MASTER'."
+	_git_checkout $MASTER
 	if [ "$(git rev-list -n2 "$MASTER..$BRANCH" | wc -l)" -eq 1 ]; then
 		git merge --ff "$BRANCH"
 	else
 		git merge --no-ff "$BRANCH"
 	fi
 	
-	git_remove_local_branch $BRANCH
-	git_remove_remote_branch $BRANCH_UPSTREAM
+	_git_remove_local_branch ${BRANCH}
+	_git_remove_remote_branch ${BRANCH_UPSTREAM#$ORIGIN/}
 }
 
 publish(){
 	BRANCH=${1:-$CUR_BRANCH}
-	_require_branch $BRANCH
+	_require_local_branch_exists $BRANCH
 
 	# TODO rebase $BRANCH
 	echo "Forcing push branch $BRANCH to $ORIGIN..."
