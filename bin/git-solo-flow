@@ -4,6 +4,10 @@ ORIGIN=origin
 UPSTREAM=origin
 MASTER=master
 
+_die() {
+	echo $@ && exit 1
+}
+
 _git_is_dirty(){
 	git diff --no-ext-diff --quiet --exit-code || echo '*'
 	if git rev-parse --quiet --verify HEAD >/dev/null; then
@@ -21,6 +25,13 @@ _require_branch(){
 	if [ $1 == "master" ]; then
 		_die "Fatal: Please specify a branch name."
 	fi
+}
+
+_lookup_upstream() {
+	local upstream
+	upstream=$(git rev-parse --verify --quiet --symbolic-full-name --abbrev-ref "$1@{upstream}" 2>/dev/null)
+	[ -z "$upstream" ] && upstream=$(git rev-parse --quiet --verify --symbolic-full-name --abbrev-ref $ORIGIN/$BRANCH)
+	echo $upstream
 }
 
 TIMES_STASHED=0
@@ -42,6 +53,19 @@ _git_checkout(){
 	git checkout $@
 }
 
+git_remove_local_branch(){
+	git branch -d $1
+}
+
+git_remove_remote_branch(){
+	local name
+	name=$(echo $1 | sed -e "s/^${ORIGIN}\///g")
+
+	if [ -n "$name" ]; then
+		git push $ORIGIN :$name
+	fi
+}
+
 
 start(){
 	BRANCH=$1
@@ -52,18 +76,42 @@ start(){
 	_git_stash_pop
 }
 
+finish(){
+	BRANCH=${1:-$CUR_BRANCH}
+	_require_branch $BRANCH
+
+	BRANCH_UPSTREAM=$(_lookup_upstream $BRANCH)
+
+	if [ -n "$BRANCH_UPSTREAM" ]; then
+		local commits
+		commits=$(git rev-list --left-right $BRANCH_UPSTREAM...$BRANCH)
+		[ -n "$commits" ] && _die "Branches '$BRANCH' and '$BRANCH_UPSTREAM' have diverged. Branches need merging first."
+	fi
+
+	# TODO rebase $BRANCH
+	_git_checkout $MASTER || _die "Could not check out branch '$MASTER'."
+	if [ "$(git rev-list -n2 "$MASTER..$BRANCH" | wc -l)" -eq 1 ]; then
+		git merge --ff "$BRANCH"
+	else
+		git merge --no-ff "$BRANCH"
+	fi
+	
+	git_remove_local_branch $BRANCH
+	git_remove_remote_branch $BRANCH_UPSTREAM
+}
+
 usage(){
 	echo "usage: git solo-flow <subcommand>"
 	echo "Available subcommands are:"
 	echo "   start     Begin working on a new feature."
-	# echo "   finish    Merge and clean up branches."
+	echo "   finish    Merge and clean up branches."
 }
 
 command=${1:-usage}
 shift
 case "$command" in
 	start) start $@ ;;
-	# finish) finish $@ ;;
+	finish) finish $@ ;;
 	*) usage ;;
 esac
 
