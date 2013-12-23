@@ -80,7 +80,7 @@ _git_checkout(){
 }
 
 _git_remove_local_branch(){
-	[ -n "$1" ] &&　git branch --delete "$1"
+	[ -n "$1" ] && git branch --delete "$1"
 }
 
 _git_remove_remote_branch(){
