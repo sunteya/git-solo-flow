@@ -76,7 +76,7 @@ _git_stash_pop(){
 }
 
 _git_checkout(){
-	git checkout $1 || _die "Could not check out branch '$1'."
+	git checkout "$@" || _die "Could not check out branch '$1'."
 }
 
 _git_remove_local_branch(){
