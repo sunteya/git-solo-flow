@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# set -x 
+# set -x
 
 ORIGIN=origin
 MASTER=master
@@ -114,7 +114,8 @@ finish(){
 	else
 		git merge --no-ff "$BRANCH"
 	fi
-	
+
+	git push $ORIGIN $MASTER
 	_git_remove_local_branch ${BRANCH}
 	_git_remove_remote_branch ${BRANCH_UPSTREAM#$ORIGIN/}
 }
