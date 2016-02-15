@@ -102,6 +102,11 @@ start(){
 
 finish(){
 	BRANCH=${1:-$CUR_BRANCH}
+	MASTER=${2:-$MASTER}
+	if [ $BRANCH = "." ]; then
+		BRANCH="$CUR_BRANCH"
+	fi
+
 	_require_local_branch_exists $BRANCH
 
 	BRANCH_UPSTREAM=$(_lookup_upstream $BRANCH)
