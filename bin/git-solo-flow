@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # set -x
+set -e
 
 ORIGIN=origin
 MASTER=master
@@ -115,7 +116,8 @@ finish(){
 		git merge --no-ff "$BRANCH"
 	fi
 
-	git push $ORIGIN $MASTER
+	git push $ORIGIN $MASTER || exit 1
+	sleep 1 # wait github merge
 	_git_remove_local_branch ${BRANCH}
 	_git_remove_remote_branch ${BRANCH_UPSTREAM#$ORIGIN/}
 }
