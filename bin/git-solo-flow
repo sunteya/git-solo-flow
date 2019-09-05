@@ -9,6 +9,8 @@ MASTER=master
 Q="--quiet"
 CUR_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
 
+fetched=0
+
 _die(){
 	echo "Fatal: $@"
 	exit 1
@@ -104,11 +106,15 @@ finish(){
 
 	BRANCH_UPSTREAM=$(_lookup_upstream $BRANCH)
 	if [ -n "$BRANCH_UPSTREAM" ]; then
+		_git_fetch
 		commits=$(git rev-list --left-right $BRANCH_UPSTREAM...$BRANCH)
 		[ -n "$commits" ] && _die "Branches '$BRANCH' and '$BRANCH_UPSTREAM' have diverged. Branches need merging first."
 	fi
 
-	rebase $BRANCH
+	if [ -n "$(git rev-list -n2 "$BRANCH..$MASTER")" ]; then
+		publish $BRANCH
+	fi
+
 	_git_checkout $MASTER
 	if [ "$(git rev-list -n2 "$MASTER..$BRANCH" | wc -l)" -eq 1 ]; then
 		git merge --ff "$BRANCH"
@@ -117,7 +123,7 @@ finish(){
 	fi
 
 	git push $ORIGIN $MASTER || exit 1
-	sleep 1 # wait github merge
+	sleep 10 # wait github merge
 	_git_remove_local_branch ${BRANCH}
 	_git_remove_remote_branch ${BRANCH_UPSTREAM#$ORIGIN/}
 }
@@ -131,12 +137,19 @@ publish(){
 	git push --set-upstream --force $ORIGIN $BRANCH || _die "Could not push branch $BRANCH to $ORIGIN."
 }
 
+_git_fetch(){
+	if (_git_remote_exists $ORIGIN) && [ "$fetch" != "1" ]; then
+		fetched=1
+		git fetch $ORIGIN || _die "Could not fetch $ORIGIN updates."
+	fi
+}
+
 rebase(){
 	BRANCH=${1:-$CUR_BRANCH}
 	_require_local_branch_exists $BRANCH
 
 	if _git_remote_exists $ORIGIN; then
-		git fetch $ORIGIN || _die "Could not fetch $ORIGIN updates."
+		_git_fetch
 
 		if _git_branch_is_split_brain $MASTER $ORIGIN/$MASTER; then
 			_die "Branches '$MASTER' and '$ORIGIN/$MASTER' have diverged. You need manually merging first."
