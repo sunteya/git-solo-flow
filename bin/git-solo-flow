@@ -4,7 +4,7 @@
 set -e
 
 ORIGIN=origin
-MASTER=master
+MASTER=$(git branch --format "%(refname:short)" | grep '^master$' || echo main)
 
 Q="--quiet"
 CUR_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
@@ -47,7 +47,7 @@ _require_branch_is_valid_name(){
 		_die "Please specify a branch name."
 	fi
 
-	if [ $1 == "master" ]; then
+	if [ $1 == $MASTER ]; then
 		_die "Please specify a branch name."
 	fi
 }
@@ -157,11 +157,11 @@ rebase(){
 
 		_git_stash
 		_git_checkout $MASTER
-		echo "Rebasing origin updates into master..."
+		echo "Rebasing origin updates into $MASTER..."
 		git merge $Q --ff-only $ORIGIN/$MASTER
 	fi
 
-	echo "Rebasing master into $BRANCH..."
+	echo "Rebasing $MASTER into $BRANCH..."
 	_git_checkout $BRANCH
 	git rebase $Q $MASTER || _die "Rebase aborted, you need finish the rebase manually."
 
